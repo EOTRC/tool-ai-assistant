@@ -2,6 +2,7 @@
 
 
 use serde_json::{json, Value};
+use std::io::{BufRead, BufReader, Write};
 use std::time::Duration;
 
 
@@ -94,4 +95,52 @@ pub fn embed_one(host: &str, model: &str, text: &str) -> Result<Vec<f32>, String
 pub fn ping(host: &str) -> Result<String, String> {
     let v = api(host, "/api/version", None)?;
     Ok(v.get("version").and_then(|x| x.as_str()).unwrap_or("?").to_string())
+}
+
+
+pub fn pull(host: &str, model: &str) -> Result<(), String> {
+    let url = format!("{}/api/pull", host.trim_end_matches('/'));
+    let payload = json!({"model": model, "stream": true});
+    let resp = ureq::post(&url)
+        .set("Content-Type", "application/json")
+        .timeout(Duration::from_secs(3600))
+        .send_json(&payload)
+        .map_err(|e| format!("Ollama недоступен: {}", e))?;
+    let mut reader = BufReader::new(resp.into_reader());
+    let mut line = String::new();
+    let mut last_pct = -1i32;
+    loop {
+        line.clear();
+        let n = reader.read_line(&mut line).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        let t = line.trim();
+        if t.is_empty() {
+            continue;
+        }
+        let v: Value = match serde_json::from_str(t) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if let Some(err) = v.get("error").and_then(|x| x.as_str()) {
+            return Err(err.to_string());
+        }
+        if let Some(st) = v.get("status").and_then(|x| x.as_str()) {
+            let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(0);
+            let completed = v.get("completed").and_then(|x| x.as_u64()).unwrap_or(0);
+            if total > 0 {
+                let pct = ((completed as f64 / total as f64) * 100.0) as i32;
+                if pct != last_pct {
+                    print!("\r  {} ... {}%", model, pct);
+                    let _ = std::io::stdout().flush();
+                    last_pct = pct;
+                }
+            } else {
+                println!("  {}: {}", model, st);
+            }
+        }
+    }
+    println!();
+    Ok(())
 }

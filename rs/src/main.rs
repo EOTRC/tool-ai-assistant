@@ -21,7 +21,7 @@ const SETTINGS_FILE: &str = "settings.cfg";
 const TOOL_COMMANDS: &[&str] = &[
     "help", "chat", "shell", "screen", "status", "models", "settings", "todo",
     "convert", "ask", "ask-file", "code", "summarize", "translate", "search",
-    "index", "clip", "ask-image", "web", "alias", "selftest",
+    "index", "clip", "ask-image", "web", "alias", "selftest", "install",
 ];
 
 const SYSTEM_COMMANDS: &[&str] = &[
@@ -712,6 +712,7 @@ fn print_help() {
     println!("    Tool screen \"что на экране\"    скриншот + описание (qwen2.5vl)");
     println!("    Tool status                    проверка Ollama");
     println!("    Tool models                    список моделей");
+    println!("    Tool install                   установить все нужные ИИ-модели (ollama pull)");
     println!();
     println!("  Файлы и документы (на чистом Rust):");
     println!("    Tool convert file.pdf --out f.txt    файл -> текст");
@@ -792,6 +793,51 @@ fn cmd_models(s: &Settings) {
         }
         Err(e) => println!("{}", e),
     }
+}
+
+fn model_installed(s: &Settings, model: &str) -> Result<bool, String> {
+    let v = api_get(&base_host(s), "/api/tags")?;
+    let names = v
+        .get("models")
+        .and_then(|m| m.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|m| m.get("name").and_then(|n| n.as_str()).map(|n| n.to_string()))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Ok(names.iter().any(|n| n == model || n.starts_with(&format!("{}:", model))))
+}
+
+fn cmd_install(s: &Settings) {
+    if !ensure_ollama(s) {
+        return;
+    }
+    let mut models: Vec<String> = vec![
+        s.model.clone(),
+        s.coder_model.clone(),
+        s.vision_model.clone(),
+        s.embed_model.clone(),
+    ];
+    models.sort();
+    models.dedup();
+    println!("Установка ИИ-моделей Ollama ({}):", models.len());
+    for m in &models {
+        match model_installed(s, m) {
+            Ok(true) => println!("  [уже есть] {}", m),
+            Ok(false) => match ollama::pull(&base_host(s), m) {
+                Ok(()) => println!("  [OK] {}", m),
+                Err(e) => println!("  [ошибка] {}: {}", m, e),
+            },
+            Err(e) => println!("  [ошибка] {}: {}", m, e),
+        }
+    }
+    println!();
+    println!("Готово. Какие модели куда:");
+    println!("  chat/ask/summarize/translate = {}", s.model);
+    println!("  code                          = {}", s.coder_model);
+    println!("  screen/ask-image              = {}", s.vision_model);
+    println!("  index/search (эмбеддинги)     = {}", s.embed_model);
 }
 
 fn cmd_chat(s: &mut Settings, args: &[String]) {
@@ -1063,6 +1109,7 @@ fn main() {
             "alias" => cmd_alias(&settings),
             "status" => cmd_status(&settings),
             "models" => cmd_models(&settings),
+            "install" => cmd_install(&settings),
             "settings" | "config" => cmd_settings(&settings, &args[1..]),
             "todo" => print_todo(&settings),
             c if DELEGATE_COMMANDS.contains(&c) => cmd_file::dispatch(&settings, &c, &args[1..]),

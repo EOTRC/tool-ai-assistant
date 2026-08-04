@@ -9,7 +9,7 @@ const SETTINGS_FILE: &str = "settings.cfg";
 const TOOL_COMMANDS: &[&str] = &[
     "help", "chat", "shell", "screen", "status", "models", "settings", "todo",
     "convert", "ask", "ask-file", "code", "summarize", "translate", "search",
-    "index", "clip", "ask-image", "web", "alias",
+    "index", "clip", "ask-image", "web", "alias", "selftest", "install",
 ];
 
 fn exe_dir() -> PathBuf {
@@ -243,6 +243,7 @@ fn main() {
             println!("    chat --once найди погоду   один ответ, сразу");
             println!("    web температура в москве    поиск в интернете (не ИИ)");
             println!("    status / models            проверка Ollama / список моделей");
+            println!("    install                    установить все нужные ИИ-модели");
             println!();
             println!("  Файлы и документы:");
             println!("    convert file.pdf --out f.txt    файл в текст");
