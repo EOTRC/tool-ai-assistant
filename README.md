@@ -26,17 +26,17 @@ Tool — мой личный локальный ИИ-ассистент для �
 Работает с [Ollama](https://ollama.com) полностью локально — наружу ничего не
 уходит, кроме запросов в интернет, если сам попросишь поискать.
 
-## Установка на macOS
+## Установка на macOS одной командой
 
-Скачай из релиза три файла и положи в одну папку: `tool`, `toolcmd` и
-`install_mac.sh`. Затем в терминале:
+Вставь в терминал:
 
 ```sh
-bash install_mac.sh
+curl -fsSL https://raw.githubusercontent.com/EOTRC/tool-ai-assistant/main/install_mac.sh | bash
 ```
 
 Скрипт сделает всё сам:
 
+- определит архитектуру (M1–M4 или Intel) и скачает нужные бинари из релиза;
 - снимет карантин Gatekeeper — macOS ругается на каждый скачанный файл без
   подписи Apple, а платить за подпись я не стал;
 - сделает бинари исполняемыми и положит их в `~/.local/tool`;
@@ -48,16 +48,6 @@ bash install_mac.sh
 пользоваться.
 
 ## Установка одной командой
-
-**macOS** (всё скачает, снимет карантин, поставит в PATH и установит модели):
-
-```sh
-mkdir -p ~/tool && cd ~/tool && \
-curl -sL -o install_mac.sh https://github.com/EOTRC/tool-ai-assistant/releases/download/v0.2.0/install_mac.sh && \
-curl -sL -o tool https://github.com/EOTRC/tool-ai-assistant/releases/download/v0.2.0/tool-macos-aarch64 && \
-curl -sL -o toolcmd https://github.com/EOTRC/tool-ai-assistant/releases/download/v0.2.0/toolcmd-macos-aarch64 && \
-bash install_mac.sh
-```
 
 **Windows** (PowerShell, скопировать и вставить целиком):
 

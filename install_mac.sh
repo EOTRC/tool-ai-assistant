@@ -1,19 +1,35 @@
 #!/bin/bash
 # ============================================================
-#  Установка Tool + toolcmd для macOS
-#  Запусти:  bash install_mac.sh
-#  Скрипт должен лежать рядом с бинарями tool и toolcmd.
+#  Установка Tool + toolcmd для macOS одной командой:
+#
+#    curl -fsSL https://raw.githubusercontent.com/EOTRC/tool-ai-assistant/main/install_mac.sh | bash
+#
 #  Что делает:
-#    1) снимает карантин Gatekeeper (xattr com.apple.quarantine)
-#    2) делает бинари исполняемыми
-#    3) копирует их в ~/.local/tool и добавляет в PATH (zsh/bash)
-#    4) проверяет Ollama, при наличии ставит ИИ-модели (tool install)
+#    1) скачивает бинари из последнего релиза GitHub (под вашу архитектуру: M1-M4 или Intel)
+#    2) снимает карантин Gatekeeper (xattr com.apple.quarantine)
+#    3) делает бинари исполняемыми
+#    4) копирует их в ~/.local/tool и добавляет в PATH (zsh/bash)
+#    5) проверяет Ollama, при наличии ставит ИИ-модели (tool install)
 # ============================================================
 
 set -e
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
+RELEASE_TAG="v0.2.0"
+REPO="EOTRC/tool-ai-assistant"
+BASE="https://github.com/$REPO/releases/download/$RELEASE_TAG"
 DEST="$HOME/.local/tool"
+
+ARCH="$(uname -m)"
+case "$ARCH" in
+  arm64|aarch64) SUFFIX="macos-aarch64" ;;
+  x86_64|amd64)  SUFFIX="macos-x86_64" ;;
+  *)
+    echo "Неизвестная архитектура: $ARCH (поддерживаются arm64 и x86_64)"
+    exit 1
+    ;;
+esac
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
 
 find_bin() {
   local name="$1" f base
@@ -30,10 +46,19 @@ find_bin() {
   return 1
 }
 
-TOOL_BIN="$(find_bin tool)" || { echo "ОШИБКА: не найден бинарь 'tool' рядом со скриптом."; exit 1; }
-TOOLCMD_BIN="$(find_bin toolcmd)" || { echo "ОШИБКА: не найден бинарь 'toolcmd' рядом со скриптом."; exit 1; }
+TOOL_BIN="$(find_bin tool || true)"
+TOOLCMD_BIN="$(find_bin toolcmd || true)"
 
-echo "Найдены:"
+if [ -z "$TOOL_BIN" ] || [ -z "$TOOLCMD_BIN" ]; then
+  echo "Бинарей рядом нет — скачиваю из релиза ($SUFFIX)..."
+  mkdir -p "$DIR"
+  curl -fsSL -o "$DIR/tool"     "$BASE/tool-$SUFFIX"
+  curl -fsSL -o "$DIR/toolcmd"  "$BASE/toolcmd-$SUFFIX"
+  TOOL_BIN="$DIR/tool"
+  TOOLCMD_BIN="$DIR/toolcmd"
+fi
+
+echo "Бинари:"
 echo "  $TOOL_BIN"
 echo "  $TOOLCMD_BIN"
 
