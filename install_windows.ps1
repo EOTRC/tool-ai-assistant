@@ -1,11 +1,12 @@
 # ============================================================
-#  Установка Tool + toolcmd для Windows
+#  Установка Tool + toolcmd + Ollama + моделей для Windows
 #  Запуск:  powershell -ExecutionPolicy Bypass -File install_windows.ps1
 #  Или просто скопируй и вставь в PowerShell.
 #  Что делает:
 #    1) скачивает tool.exe и toolcmd.exe из релиза GitHub
 #    2) кладёт их в ~\tool и добавляет папку в PATH пользователя
-#    3) проверяет Ollama и ставит ИИ-модели (tool install)
+#    3) ставит последнюю версию Ollama (tool install ollama)
+#    4) ставит ИИ-модели (tool install models)
 # ============================================================
 
 $ErrorActionPreference = "Stop"
@@ -28,19 +29,12 @@ if ($userPath -notlike "*$dir*") {
 $env:Path = "$env:Path;$dir"
 
 Write-Host ""
-if (Get-Command ollama -ErrorAction SilentlyContinue) {
-    Write-Host "Ollama найдена: $(ollama --version 2>$null)"
-} else {
-    Write-Host "Ollama CLI не найдена. Скачай с https://ollama.com/download/windows"
-}
+Write-Host "==> Установка последней версии Ollama..."
+& (Join-Path $dir "tool.exe") install ollama
 
 Write-Host ""
-Write-Host "Установка ИИ-моделей (qwen3:1.7b, qwen2.5-coder:7b, qwen2.5vl:3b, nomic-embed-text)..."
-if (Get-Command ollama -ErrorAction SilentlyContinue) {
-    & (Join-Path $dir "tool.exe") install
-} else {
-    Write-Host "После установки Ollama выполни: tool install"
-}
+Write-Host "==> Установка ИИ-моделей (~8 ГБ, может занять время)..."
+& (Join-Path $dir "tool.exe") install models
 
 Write-Host ""
 Write-Host "Готово. Проверка:"

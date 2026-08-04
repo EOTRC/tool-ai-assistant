@@ -712,7 +712,8 @@ fn print_help() {
     println!("    Tool screen \"что на экране\"    скриншот + описание (qwen2.5vl)");
     println!("    Tool status                    проверка Ollama");
     println!("    Tool models                    список моделей");
-    println!("    Tool install                   установить все нужные ИИ-модели (ollama pull)");
+    println!("    Tool install ollama            установить Ollama (последняя версия для этой ОС)");
+    println!("    Tool install models            установить все нужные ИИ-модели (ollama pull)");
     println!();
     println!("  Файлы и документы (на чистом Rust):");
     println!("    Tool convert file.pdf --out f.txt    файл -> текст");
@@ -809,7 +810,112 @@ fn model_installed(s: &Settings, model: &str) -> Result<bool, String> {
     Ok(names.iter().any(|n| n == model || n.starts_with(&format!("{}:", model))))
 }
 
-fn cmd_install(s: &Settings) {
+fn print_install_usage() {
+    println!("Использование: Tool install <что установить>");
+    println!("  Tool install ollama    установить Ollama (последняя версия) для этой системы");
+    println!("  Tool install models    установить ИИ-модели из settings.cfg (ollama pull)");
+}
+
+fn cmd_install(s: &Settings, args: &[String]) {
+    match args.first().map(|a| a.as_str()) {
+        Some("ollama") => cmd_install_ollama(s),
+        Some("models") => cmd_install_models(s),
+        Some(other) => {
+            eprintln!("Неизвестная подкоманда: {}", other);
+            print_install_usage();
+        }
+        None => print_install_usage(),
+    }
+}
+
+fn download_to(url: &str, dest: &std::path::Path) -> Result<(), String> {
+    let resp = ureq::get(url)
+        .timeout(Duration::from_secs(600))
+        .call()
+        .map_err(|e| format!("Ошибка скачивания {}: {}", url, e))?;
+    let mut reader = resp.into_reader();
+    let mut file = fs::File::create(dest).map_err(|e| format!("Не удалось создать файл {}: {}", dest.display(), e))?;
+    io::copy(&mut reader, &mut file).map_err(|e| format!("Ошибка записи {}: {}", dest.display(), e))?;
+    Ok(())
+}
+
+fn wait_for_ollama(s: &Settings) {
+    let host = base_host(s);
+    for _ in 0..30 {
+        if api_get(&host, "/api/version").is_ok() {
+            println!("Ollama запущен ({}).", host);
+            return;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    eprintln!("Ollama не отвечает на {}. Запусти Ollama вручную.", host);
+}
+
+#[cfg(target_os = "windows")]
+fn cmd_install_ollama(s: &Settings) {
+    let url = "https://ollama.com/download/OllamaSetup.exe";
+    let tmp = env::temp_dir().join("OllamaSetup.exe");
+    println!("Скачивание Ollama (последняя версия для Windows)...");
+    if let Err(e) = download_to(url, &tmp) {
+        eprintln!("{}", e);
+        return;
+    }
+    println!("Тихая установка...");
+    match Command::new(&tmp).arg("/S").status() {
+        Ok(_) => println!("Установка завершена."),
+        Err(e) => eprintln!("Ошибка запуска установщика: {}", e),
+    }
+    let _ = fs::remove_file(&tmp);
+    let la = env::var("LOCALAPPDATA").unwrap_or_default();
+    let app = PathBuf::from(&la).join("Programs").join("Ollama").join("ollama app.exe");
+    let _ = Command::new(&app).spawn();
+    wait_for_ollama(s);
+}
+
+#[cfg(target_os = "macos")]
+fn cmd_install_ollama(s: &Settings) {
+    let url = "https://ollama.com/download/Ollama-darwin.zip";
+    let tmp = env::temp_dir().join("Ollama-darwin.zip");
+    println!("Скачивание Ollama (последняя версия для macOS)...");
+    if let Err(e) = download_to(url, &tmp) {
+        eprintln!("{}", e);
+        return;
+    }
+    let tmp_s = tmp.to_string_lossy().to_string();
+    let mut app = "/Applications/Ollama.app".to_string();
+    let ok = Command::new("ditto")
+        .args(["-xk", &tmp_s, "/Applications"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        let home = env::var("HOME").unwrap_or_default();
+        let dest = format!("{}/Applications", home);
+        println!("Нет прав на /Applications — ставлю в {}", dest);
+        let _ = fs::create_dir_all(&dest);
+        if Command::new("ditto").args(["-xk", &tmp_s, &dest]).status().map(|s| s.success()).unwrap_or(false) {
+            app = format!("{}/Ollama.app", dest);
+        }
+    }
+    let _ = fs::remove_file(&tmp);
+    let _ = Command::new("open").arg(&app).spawn();
+    println!("Запускаю Ollama.app...");
+    wait_for_ollama(s);
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn cmd_install_ollama(s: &Settings) {
+    println!("Установка Ollama (последняя версия для Linux) официальным скриптом...");
+    match Command::new("sh").args(["-c", "curl -fsSL https://ollama.com/install.sh | sh"]).status() {
+        Ok(_) => {
+            let _ = Command::new("ollama").arg("serve").spawn();
+            wait_for_ollama(s);
+        }
+        Err(e) => eprintln!("Ошибка запуска установщика: {}", e),
+    }
+}
+
+fn cmd_install_models(s: &Settings) {
     if !ensure_ollama(s) {
         return;
     }
@@ -1109,7 +1215,7 @@ fn main() {
             "alias" => cmd_alias(&settings),
             "status" => cmd_status(&settings),
             "models" => cmd_models(&settings),
-            "install" => cmd_install(&settings),
+            "install" => cmd_install(&settings, &args[1..]),
             "settings" | "config" => cmd_settings(&settings, &args[1..]),
             "todo" => print_todo(&settings),
             c if DELEGATE_COMMANDS.contains(&c) => cmd_file::dispatch(&settings, &c, &args[1..]),

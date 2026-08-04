@@ -1,15 +1,16 @@
 #!/bin/bash
 # ============================================================
-#  Установка Tool + toolcmd для macOS одной командой:
+#  Установка Tool + toolcmd + Ollama + моделей для macOS.
+#  Всё делается само, одна команда:
 #
 #    curl -fsSL https://raw.githubusercontent.com/EOTRC/tool-ai-assistant/main/install_mac.sh | bash
 #
 #  Что делает:
-#    1) скачивает бинари из последнего релиза GitHub (под вашу архитектуру: M1-M4 или Intel)
+#    1) определяет архитектуру (M1-M4 или Intel) и скачивает бинари из релиза
 #    2) снимает карантин Gatekeeper (xattr com.apple.quarantine)
-#    3) делает бинари исполняемыми
-#    4) копирует их в ~/.local/tool и добавляет в PATH (zsh/bash)
-#    5) проверяет Ollama, при наличии ставит ИИ-модели (tool install)
+#    3) кладёт tool и toolcmd в ~/.local/tool и добавляет в PATH (zsh/bash)
+#    4) ставит последнюю версию Ollama (tool install ollama)
+#    5) ставит ИИ-модели (tool install models)
 # ============================================================
 
 set -e
@@ -87,45 +88,21 @@ add_to_rc "$HOME/.bashrc"
 export PATH="$HOME/.local/tool:$PATH"
 
 echo ""
-echo "Установлено:"
+echo "Tool установлен:"
 echo "  tool    -> $DEST/tool"
 echo "  toolcmd -> $DEST/toolcmd"
 echo "PATH добавлен в ~/.zshrc, ~/.bash_profile, ~/.bashrc"
-echo "Открой новый терминал (или: source ~/.zshrc) — команды tool и toolcmd будут доступны отовсюду."
 echo ""
 
-if command -v ollama >/dev/null 2>&1; then
-  echo "Ollama CLI найдена: $(ollama --version 2>/dev/null || echo '?')"
-else
-  echo "Ollama CLI не найдена."
-  if command -v brew >/dev/null 2>&1; then
-    echo "Установить Ollama через Homebrew? [y/N]"
-    read -r ans
-    if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-      brew install ollama
-    fi
-  else
-    echo "Скачай Ollama с https://ollama.com/download/macOS"
-    echo "или установи Homebrew: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-  fi
-fi
+echo "==> Установка последней версии Ollama..."
+"$DEST/tool" install ollama
 
 echo ""
-echo "Установка ИИ-моделей (это займёт время, ~8 ГБ):"
-echo "  qwen3:1.7b, qwen2.5-coder:7b, qwen2.5vl:3b, nomic-embed-text"
-echo ""
-if command -v ollama >/dev/null 2>&1; then
-  if curl -s --max-time 3 http://localhost:11434/api/version >/dev/null 2>&1; then
-    "$DEST/tool" install
-  else
-    echo "Ollama не запущена. Запусти Ollama.app или 'ollama serve', затем выполни: tool install"
-  fi
-else
-  echo "После установки Ollama выполни: tool install"
-fi
+echo "==> Установка ИИ-моделей (~8 ГБ, может занять время)..."
+"$DEST/tool" install models
 
 echo ""
-echo "Готово! Проверка:"
+echo "Готово! Открой новый терминал (или: source ~/.zshrc) и проверь:"
 echo "  tool --version"
 echo "  tool help"
 echo "  toolcmd"

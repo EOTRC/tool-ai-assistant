@@ -243,7 +243,7 @@ fn main() {
             println!("    chat --once найди погоду   один ответ, сразу");
             println!("    web температура в москве    поиск в интернете (не ИИ)");
             println!("    status / models            проверка Ollama / список моделей");
-            println!("    install                    установить все нужные ИИ-модели");
+            println!("    install ollama|models     установить Ollama или ИИ-модели");
             println!();
             println!("  Файлы и документы:");
             println!("    convert file.pdf --out f.txt    файл в текст");
