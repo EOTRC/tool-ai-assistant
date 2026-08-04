@@ -766,18 +766,25 @@ fn print_todo(settings: &Settings) {
 }
 
 fn cmd_status(s: &Settings) {
+    let cli = Command::new("ollama").arg("--version").output();
+    match cli {
+        Ok(o) if o.status.success() => {
+            let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            println!("Ollama CLI: установлен ({})", v);
+        }
+        _ => println!("Ollama CLI: НЕ установлен. Выполни: Tool install ollama"),
+    }
     let host = base_host(s);
     match api_get(&host, "/api/version") {
         Ok(v) => {
             let ver = v.get("version").and_then(|x| x.as_str()).unwrap_or("?");
-            println!("Ollama: OK ({})", ver);
+            println!("Ollama сервер: работает ({})", ver);
+            cmd_models(s);
         }
         Err(e) => {
-            println!("{} (запусти 'ollama serve')", e);
-            return;
+            println!("Ollama сервер: не отвечает — {} (запусти 'ollama serve')", e);
         }
     }
-    cmd_models(s);
 }
 
 fn cmd_models(s: &Settings) {

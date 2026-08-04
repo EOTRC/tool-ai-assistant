@@ -22,11 +22,15 @@ Invoke-WebRequest -UseBasicParsing -Uri "$base/toolcmd-windows-x86_64.exe" -OutF
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notlike "*$dir*") {
     [Environment]::SetEnvironmentVariable("Path", "$userPath;$dir", "User")
-    Write-Host "Папка добавлена в PATH. Открой новый терминал."
+    Write-Host "Папка добавлена в PATH (пользовательский)."
 } else {
     Write-Host "Папка уже в PATH."
 }
 $env:Path = "$env:Path;$dir"
+Write-Host ""
+Write-Host "ВАЖНО: если tool/toolcmd не находятся в уже открытых терминалах —"
+Write-Host "закрой и открой терминал заново (PATH подхватывается новым окном)."
+Write-Host "В этом же окне они уже доступны."
 
 Write-Host ""
 Write-Host "==> Установка последней версии Ollama..."
