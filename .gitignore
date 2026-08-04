@@ -1,0 +1,19 @@
+# Build artifacts
+rs/target/
+
+# Machine-specific cargo config
+rs/.cargo/
+
+# Local settings (contains personal config)
+settings.cfg
+
+# Binaries
+*.exe
+
+# Local backups / duplicates
+old-ver/
+mac/
+
+# Python cache
+__pycache__/
+*.pyc
