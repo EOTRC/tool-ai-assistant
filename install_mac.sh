@@ -1,108 +1,159 @@
 #!/bin/bash
 # ============================================================
-#  Установка Tool + toolcmd + Ollama + моделей для macOS.
-#  Всё делается само, одна команда:
+#  Надёжная установка Tool + toolcmd для macOS
+#  Работает и через curl | bash, и локально.
 #
+#  Использование:
 #    curl -fsSL https://raw.githubusercontent.com/EOTRC/tool-ai-assistant/main/install_mac.sh | bash
-#
-#  Что делает:
-#    1) определяет архитектуру (M1-M4 или Intel) и скачивает бинари из релиза
-#    2) снимает карантин Gatekeeper (xattr com.apple.quarantine)
-#    3) кладёт tool и toolcmd в ~/.local/tool и добавляет в PATH (zsh/bash)
-#    4) ставит последнюю версию Ollama (tool install ollama)
-#    5) ставит ИИ-модели (tool install models)
 # ============================================================
 
-set -e
+set -euo pipefail
 
-RELEASE_TAG="v0.2.0"
 REPO="EOTRC/tool-ai-assistant"
-BASE="https://github.com/$REPO/releases/download/$RELEASE_TAG"
 DEST="$HOME/.local/tool"
+API="https://api.github.com/repos/$REPO/releases/latest"
 
+echo "==> Определение архитектуры..."
 ARCH="$(uname -m)"
 case "$ARCH" in
   arm64|aarch64) SUFFIX="macos-aarch64" ;;
   x86_64|amd64)  SUFFIX="macos-x86_64" ;;
   *)
-    echo "Неизвестная архитектура: $ARCH (поддерживаются arm64 и x86_64)"
+    echo "Ошибка: неизвестная архитектура '$ARCH'. Поддерживаются arm64 и x86_64."
     exit 1
     ;;
 esac
+echo "    Архитектура: $ARCH → $SUFFIX"
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
+echo "==> Получение информации о последнем релизе..."
+# Получаем tag последнего релиза
+RELEASE_TAG=$(curl -fsSL "$API" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -z "$RELEASE_TAG" ]; then
+  echo "Ошибка: не удалось получить tag последнего релиза."
+  exit 1
+fi
+echo "    Релиз: $RELEASE_TAG"
 
-find_bin() {
-  local name="$1" f base
-  for f in "$DIR"/*; do
-    [ -f "$f" ] || continue
-    base="$(basename "$f")"
-    case "$base" in
-      toolcmd*|settings.cfg*|*.sh|install*|LICENSE*|README*) continue ;;
-    esac
-    case "$base" in
-      "$name"|"$name"[-.]*) printf '%s' "$f"; return 0 ;;
-    esac
-  done
-  return 1
-}
+BASE="https://github.com/$REPO/releases/download/$RELEASE_TAG"
+TOOL_URL="$BASE/tool-$SUFFIX"
+TOOLCMD_URL="$BASE/toolcmd-$SUFFIX"
 
-TOOL_BIN="$(find_bin tool || true)"
-TOOLCMD_BIN="$(find_bin toolcmd || true)"
-
-if [ -z "$TOOL_BIN" ] || [ -z "$TOOLCMD_BIN" ]; then
-  echo "Бинарей рядом нет — скачиваю из релиза ($SUFFIX)..."
-  mkdir -p "$DIR"
-  curl -fsSL -o "$DIR/tool"     "$BASE/tool-$SUFFIX"
-  curl -fsSL -o "$DIR/toolcmd"  "$BASE/toolcmd-$SUFFIX"
-  TOOL_BIN="$DIR/tool"
-  TOOLCMD_BIN="$DIR/toolcmd"
+# Проверяем, что файлы существуют в релизе
+echo "==> Проверка наличия бинарей в релизе..."
+if ! curl -fsSL -I -o /dev/null -w "%{http_code}" "$TOOL_URL" | grep -q "200"; then
+  echo "Ошибка: файл tool-$SUFFIX не найден в релизе $RELEASE_TAG"
+  echo "Доступные файлы можно посмотреть здесь:"
+  echo "  https://github.com/$REPO/releases/tag/$RELEASE_TAG"
+  exit 1
+fi
+if ! curl -fsSL -I -o /dev/null -w "%{http_code}" "$TOOLCMD_URL" | grep -q "200"; then
+  echo "Ошибка: файл toolcmd-$SUFFIX не найден в релизе $RELEASE_TAG"
+  exit 1
 fi
 
-echo "Бинари:"
-echo "  $TOOL_BIN"
-echo "  $TOOLCMD_BIN"
-
-for f in "$TOOL_BIN" "$TOOLCMD_BIN"; do
-  xattr -d com.apple.quarantine "$f" 2>/dev/null || true
-  chmod +x "$f"
-done
-
+echo "==> Создание директории $DEST..."
 mkdir -p "$DEST"
-cp -f "$TOOL_BIN" "$DEST/tool"
-cp -f "$TOOLCMD_BIN" "$DEST/toolcmd"
-if [ -f "$DIR/settings.cfg.template" ]; then
-  cp -f "$DIR/settings.cfg.template" "$DEST/settings.cfg.template"
+
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+echo "==> Скачивание tool..."
+curl -fsSL -o "$TMPDIR/tool" "$TOOL_URL"
+echo "==> Скачивание toolcmd..."
+curl -fsSL -o "$TMPDIR/toolcmd" "$TOOLCMD_URL"
+
+# Проверяем, что файлы не пустые
+if [ ! -s "$TMPDIR/tool" ] || [ ! -s "$TMPDIR/toolcmd" ]; then
+  echo "Ошибка: скачанные файлы пустые или повреждены."
+  exit 1
 fi
+
+echo "==> Снятие quarantine и установка прав..."
+xattr -d com.apple.quarantine "$TMPDIR/tool" 2>/dev/null || true
+xattr -d com.apple.quarantine "$TMPDIR/toolcmd" 2>/dev/null || true
+chmod +x "$TMPDIR/tool" "$TMPDIR/toolcmd"
+
+echo "==> Копирование в $DEST..."
+cp -f "$TMPDIR/tool"     "$DEST/tool"
+cp -f "$TMPDIR/toolcmd"  "$DEST/toolcmd"
+
+# Опционально — settings.cfg.template
+TEMPLATE_URL="$BASE/settings.cfg.template"
+if curl -fsSL -I -o /dev/null -w "%{http_code}" "$TEMPLATE_URL" 2>/dev/null | grep -q "200"; then
+  curl -fsSL -o "$DEST/settings.cfg.template" "$TEMPLATE_URL" || true
+fi
+
+echo "==> Добавление $DEST в PATH..."
 
 add_to_rc() {
   local rc="$1"
-  [ -f "$rc" ] || return 0
-  grep -qF 'export PATH="$HOME/.local/tool:$PATH"' "$rc" \
-    || echo 'export PATH="$HOME/.local/tool:$PATH"' >> "$rc"
+  local line='export PATH="$HOME/.local/tool:$PATH"'
+  # Создаём файл, если его нет (особенно важно для .zprofile / .bash_profile)
+  touch "$rc" 2>/dev/null || return 0
+  if ! grep -qF '.local/tool' "$rc" 2>/dev/null; then
+    echo "" >> "$rc"
+    echo "# Tool AI Assistant" >> "$rc"
+    echo "$line" >> "$rc"
+    echo "    Добавлено в $rc"
+  else
+    echo "    Уже есть в $rc"
+  fi
 }
+
+# zsh (основной shell на современных macOS)
 add_to_rc "$HOME/.zshrc"
+add_to_rc "$HOME/.zprofile"
+
+# bash
 add_to_rc "$HOME/.bash_profile"
 add_to_rc "$HOME/.bashrc"
+add_to_rc "$HOME/.profile"
 
+# Сразу делаем доступным в текущей сессии
 export PATH="$HOME/.local/tool:$PATH"
 
 echo ""
-echo "Tool установлен:"
-echo "  tool    -> $DEST/tool"
-echo "  toolcmd -> $DEST/toolcmd"
-echo "PATH добавлен в ~/.zshrc, ~/.bash_profile, ~/.bashrc"
+echo "✓ Tool установлен:"
+echo "    tool     → $DEST/tool"
+echo "    toolcmd  → $DEST/toolcmd"
 echo ""
 
-echo "==> Установка последней версии Ollama..."
-"$DEST/tool" install ollama
+# Проверка, что команды находятся
+if ! command -v tool >/dev/null 2>&1; then
+  echo "Внимание: 'tool' пока не в PATH этой сессии."
+  echo "Выполни:  source ~/.zshrc   (или открой новый терминал)"
+else
+  echo "✓ Команда 'tool' доступна в текущей сессии"
+  tool --version 2>/dev/null || tool help 2>/dev/null || true
+fi
 
 echo ""
-echo "==> Установка ИИ-моделей (~8 ГБ, может занять время)..."
-"$DEST/tool" install models
+echo "==> Установка Ollama (последняя версия)..."
+if "$DEST/tool" install ollama; then
+  echo "✓ Ollama установлена"
+else
+  echo "⚠ Не удалось установить Ollama автоматически."
+  echo "  Можно поставить вручную: https://ollama.com/download"
+fi
 
 echo ""
-echo "Готово! Открой новый терминал (или: source ~/.zshrc) и проверь:"
-echo "  tool --version"
-echo "  tool help"
-echo "  toolcmd"
+echo "==> Установка ИИ-моделей (может занять несколько минут, ~8 ГБ)..."
+if "$DEST/tool" install models; then
+  echo "✓ Модели установлены"
+else
+  echo "⚠ Не удалось установить модели."
+  echo "  Позже выполни: tool install models"
+fi
+
+echo ""
+echo "============================================================"
+echo "  Готово!"
+echo ""
+echo "  Открой НОВЫЙ терминал (или выполни: source ~/.zshrc)"
+echo "  и проверь:"
+echo ""
+echo "    tool --version"
+echo "    tool help"
+echo "    toolcmd"
+echo "    tool selftest"
+echo "============================================================"
