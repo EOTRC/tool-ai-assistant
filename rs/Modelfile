@@ -1,2 +1,2 @@
-FROM qwen3:4b
+FROM qwen3:1.7b
 PARAMETER think false
