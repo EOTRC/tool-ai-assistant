@@ -47,6 +47,30 @@ bash install_mac.sh
 После установки открой новый терминал (или `source ~/.zshrc`) — можно
 пользоваться.
 
+## Установка одной командой
+
+**macOS** (всё скачает, снимет карантин, поставит в PATH и установит модели):
+
+```sh
+mkdir -p ~/tool && cd ~/tool && \
+curl -sL -o install_mac.sh https://github.com/EOTRC/tool-ai-assistant/releases/download/v0.2.0/install_mac.sh && \
+curl -sL -o tool https://github.com/EOTRC/tool-ai-assistant/releases/download/v0.2.0/tool-macos-aarch64 && \
+curl -sL -o toolcmd https://github.com/EOTRC/tool-ai-assistant/releases/download/v0.2.0/toolcmd-macos-aarch64 && \
+bash install_mac.sh
+```
+
+**Windows** (PowerShell, скопировать и вставить целиком):
+
+```powershell
+$dir="$env:USERPROFILE\tool"; New-Item -ItemType Directory -Force $dir | Out-Null; $b="https://github.com/EOTRC/tool-ai-assistant/releases/download/v0.2.0"; Invoke-WebRequest -UseBasicParsing "$b/tool-windows-x86_64.exe" -OutFile "$dir\tool.exe"; Invoke-WebRequest -UseBasicParsing "$b/toolcmd-windows-x86_64.exe" -OutFile "$dir\toolcmd.exe"; $up=[Environment]::GetEnvironmentVariable('Path','User'); if($up -notlike "*$dir*"){[Environment]::SetEnvironmentVariable('Path',"$up;$dir",'User')}; Set-Location $dir; .\tool.exe help
+```
+
+Или скачай `install_windows.ps1` из релиза и запусти:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install_windows.ps1
+```
+
 ## Установка моделей
 
 Все модели, которые используются в коде, ставятся одной командой:
