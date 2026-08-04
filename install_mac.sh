@@ -83,26 +83,39 @@ if curl -fsSL -I -o /dev/null -w "%{http_code}" "$TEMPLATE_URL" 2>/dev/null | gr
   curl -fsSL -o "$DEST/settings.cfg.template" "$TEMPLATE_URL" || true
 fi
 
-echo "==> Добавление $DEST в PATH..."
+echo "==> Добавление $DEST в PATH и алиасов tool/toolcmd..."
+
+# Находим реальный каталог конфигов zsh: ZDOTDIR может быть не $HOME
+ZD="${ZDOTDIR:-}"
+if [ -z "$ZD" ]; then
+  ZD="$(zsh -lc 'printf %s "$ZDOTDIR"' 2>/dev/null || true)"
+fi
+ZD="${ZD:-$HOME}"
+echo "    ZDOTDIR=$ZD"
 
 add_to_rc() {
   local rc="$1"
   local line='export PATH="$HOME/.local/tool:$PATH"'
+  local alias_tool='alias tool="$HOME/.local/tool/tool"'
+  local alias_toolcmd='alias toolcmd="$HOME/.local/tool/toolcmd"'
   # Создаём файл, если его нет (особенно важно для .zprofile / .bash_profile)
   touch "$rc" 2>/dev/null || return 0
   if ! grep -qF '.local/tool' "$rc" 2>/dev/null; then
     echo "" >> "$rc"
     echo "# Tool AI Assistant" >> "$rc"
     echo "$line" >> "$rc"
+    echo "$alias_tool" >> "$rc"
+    echo "$alias_toolcmd" >> "$rc"
     echo "    Добавлено в $rc"
   else
     echo "    Уже есть в $rc"
   fi
 }
 
-# zsh (основной shell на современных macOS)
-add_to_rc "$HOME/.zshrc"
-add_to_rc "$HOME/.zprofile"
+# zsh (основной shell на современных macOS), с учётом ZDOTDIR
+add_to_rc "$ZD/.zshrc"
+[ -f "$ZD/.zprofile" ] && add_to_rc "$ZD/.zprofile"
+[ -f "$ZD/.zshenv" ] && add_to_rc "$ZD/.zshenv"
 
 # bash
 add_to_rc "$HOME/.bash_profile"
@@ -111,6 +124,8 @@ add_to_rc "$HOME/.profile"
 
 # Сразу делаем доступным в текущей сессии
 export PATH="$HOME/.local/tool:$PATH"
+eval "$(echo 'alias tool="$HOME/.local/tool/tool"')"
+eval "$(echo 'alias toolcmd="$HOME/.local/tool/toolcmd"')"
 
 echo ""
 echo "✓ Tool установлен:"
