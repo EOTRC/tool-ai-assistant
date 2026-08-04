@@ -68,14 +68,24 @@ if [ ! -s "$TMPDIR/tool" ] || [ ! -s "$TMPDIR/toolcmd" ]; then
   exit 1
 fi
 
-echo "==> Снятие quarantine и установка прав..."
-xattr -d com.apple.quarantine "$TMPDIR/tool" 2>/dev/null || true
-xattr -d com.apple.quarantine "$TMPDIR/toolcmd" 2>/dev/null || true
+echo "==> Копирование в $DEST (имена файлов: tool, toolcmd)..."
 chmod +x "$TMPDIR/tool" "$TMPDIR/toolcmd"
-
-echo "==> Копирование в $DEST..."
 cp -f "$TMPDIR/tool"     "$DEST/tool"
 cp -f "$TMPDIR/toolcmd"  "$DEST/toolcmd"
+
+# Обязательно: файлы должны называться ровно tool и toolcmd
+if [ ! -f "$DEST/tool" ] || [ ! -f "$DEST/toolcmd" ]; then
+  echo "Ошибка: в $DEST должны лежать файлы с именами 'tool' и 'toolcmd'."
+  exit 1
+fi
+
+# Обход Gatekeeper на уже установленных файлах (quarantine копируется вместе с файлом)
+echo "==> Обход Gatekeeper (xattr -d com.apple.quarantine)..."
+for f in "$DEST/tool" "$DEST/toolcmd"; do
+  xattr -d com.apple.quarantine "$f" 2>/dev/null || true
+  chmod +x "$f"
+  echo "    $f"
+done
 
 # Опционально — settings.cfg.template
 TEMPLATE_URL="$BASE/settings.cfg.template"
@@ -126,6 +136,23 @@ add_to_rc "$HOME/.profile"
 export PATH="$HOME/.local/tool:$PATH"
 eval "$(echo 'alias tool="$HOME/.local/tool/tool"')"
 eval "$(echo 'alias toolcmd="$HOME/.local/tool/toolcmd"')"
+
+# Проверяем xattr после установки: если карантин остался — снимаем ещё раз
+echo "==> Проверка xattr (карантин должен быть снят)..."
+Q=0
+for f in "$DEST/tool" "$DEST/toolcmd"; do
+  if xattr -p com.apple.quarantine "$f" >/dev/null 2>&1; then
+    echo "    Карантин найден на $f — снимаю (xattr -c)..."
+    xattr -c "$f" 2>/dev/null || true
+    xattr -d com.apple.quarantine "$f" 2>/dev/null || true
+    Q=1
+  fi
+done
+if [ "$Q" = "0" ]; then
+  echo "    OK: карантин снят с tool и toolcmd"
+else
+  echo "    Готово: карантин снят повторно"
+fi
 
 echo ""
 echo "✓ Tool установлен:"
