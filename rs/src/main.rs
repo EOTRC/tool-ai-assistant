@@ -436,7 +436,7 @@ fn resolve(first: &str, settings: &mut Settings) -> Resolution {
             Resolution::Tool
         };
     }
-    println!("Команда '{}' есть и в Tool, и в Windows. Как использовать?", first);
+    println!("Команда '{}' есть и в Tool, и в системе. Как использовать?", first);
     println!("  1) Tool      2) Система      3) Всегда Tool      4) Всегда Система");
     print!("Выбор [1-4]: ");
     io::stdout().flush().ok();
@@ -460,6 +460,26 @@ fn resolve(first: &str, settings: &mut Settings) -> Resolution {
 }
 
 
+#[cfg(not(target_os = "windows"))]
+fn detected_shell() -> String {
+    let sh = std::env::var("SHELL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/bin/sh".to_string());
+    sh.split_whitespace().next().unwrap_or("/bin/sh").to_string()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn shell_display_name() -> String {
+    let sh = detected_shell();
+    let base = sh.rsplit('/').next().unwrap_or("sh").to_string();
+    if cfg!(target_os = "macos") {
+        format!("{} (macOS)", base)
+    } else {
+        format!("{} (Linux)", base)
+    }
+}
+
 fn run_shell(line: &str) -> std::io::Result<std::process::ExitStatus> {
     #[cfg(target_os = "windows")]
     {
@@ -467,7 +487,7 @@ fn run_shell(line: &str) -> std::io::Result<std::process::ExitStatus> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Command::new("/bin/sh").args(["-c", line]).status()
+        Command::new(&detected_shell()).args(["-c", line]).status()
     }
 }
 
@@ -696,10 +716,18 @@ fn print_help() {
     println!("  Файлы и документы (на чистом Rust):");
     println!("    Tool convert file.pdf --out f.txt    файл -> текст");
     println!("    Tool ask \"вопрос по материалам\"       вопрос по индексу (RAG)");
-    println!("    Tool index C:\\documents               построить индекс");
+    if cfg!(target_os = "windows") {
+        println!("    Tool index C:\\documents               построить индекс");
+    } else {
+        println!("    Tool index ~/documents                построить индекс");
+    }
     println!("    Tool ask-file file.docx \"резюме\"      задание по файлу");
     println!("    Tool code main.py \"найди баги\"        работа с кодом");
-    println!("    Tool summarize C:\\documents           резюме файлов/папок");
+    if cfg!(target_os = "windows") {
+        println!("    Tool summarize C:\\documents           резюме файлов/папок");
+    } else {
+        println!("    Tool summarize ~/documents            резюме файлов/папок");
+    }
     println!("    Tool translate \"Hello\" --to русский   перевод");
     println!("    Tool search \"температура чая\"         поиск по индексу");
     println!("    Tool clip \"переведи\"                 буфер обмена");
@@ -901,7 +929,7 @@ fn cmd_shell(s: &Settings, args: &[String]) {
     #[cfg(target_os = "windows")]
     let shell_name = "PowerShell для Windows 11";
     #[cfg(not(target_os = "windows"))]
-    let shell_name = "Bash (Linux/macOS)";
+    let shell_name = shell_display_name();
     let mut sys = format!(
         "Ты генератор команд {}. Отвечай ОДНОЙ командой, \
          без пояснений, без markdown. Пути с пробелами бери в одинарные кавычки. \

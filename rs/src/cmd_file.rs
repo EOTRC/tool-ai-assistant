@@ -101,9 +101,13 @@ fn convert_cmd(s: &crate::Settings, args: &[String]) -> Result<(), String> {
 
 fn index_cmd(s: &crate::Settings, args: &[String]) -> Result<(), String> {
     let (flags, pos) = split_flags(args, &["--index"]);
-    let dir = pos
-        .first()
-        .ok_or("Укажи файл или папку: Tool index C:\\documents")?;
+    let dir = pos.first().ok_or_else(|| {
+        if cfg!(target_os = "windows") {
+            "Укажи файл или папку: Tool index C:\\documents".to_string()
+        } else {
+            "Укажи файл или папку: Tool index ~/documents".to_string()
+        }
+    })?;
     let index_file = flags.get("--index").cloned().unwrap_or_else(|| "index.json".to_string());
     rag::index(&crate::base_host(s), &s.embed_model, dir, &index_file)
 }
@@ -186,7 +190,11 @@ fn ask_image_cmd(s: &crate::Settings, args: &[String]) -> Result<(), String> {
 fn summarize_cmd(s: &crate::Settings, args: &[String]) -> Result<(), String> {
     let (_, pos) = split_flags(args, &[]);
     if pos.is_empty() {
-        return Err("Укажи файлы или папки: Tool summarize C:\\documents".to_string());
+        return Err(if cfg!(target_os = "windows") {
+            "Укажи файлы или папки: Tool summarize C:\\documents".to_string()
+        } else {
+            "Укажи файлы или папки: Tool summarize ~/documents".to_string()
+        });
     }
     if !crate::ensure_ollama(s) {
         return Ok(());

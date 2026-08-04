@@ -147,6 +147,15 @@ fn exec_tool(args: &[String]) {
 }
 
 
+#[cfg(not(target_os = "windows"))]
+fn detected_shell() -> String {
+    let sh = env::var("SHELL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/bin/sh".to_string());
+    sh.split_whitespace().next().unwrap_or("/bin/sh").to_string()
+}
+
 fn run_shell(line: &str) -> std::io::Result<std::process::ExitStatus> {
     #[cfg(target_os = "windows")]
     {
@@ -154,7 +163,7 @@ fn run_shell(line: &str) -> std::io::Result<std::process::ExitStatus> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Command::new("/bin/sh").args(["-c", line]).status()
+        Command::new(&detected_shell()).args(["-c", line]).status()
     }
 }
 
@@ -237,12 +246,20 @@ fn main() {
             println!();
             println!("  Файлы и документы:");
             println!("    convert file.pdf --out f.txt    файл в текст");
-            println!("    index C:\\documents               построить поиск по папке");
+            if cfg!(target_os = "windows") {
+                println!("    index C:\\documents               построить поиск по папке");
+            } else {
+                println!("    index ~/documents                построить поиск по папке");
+            }
             println!("    search погода в москве           поиск по индексу");
             println!("    ask какие выводы в материалах    вопрос по индексу (RAG)");
             println!("    ask-file отчёт.docx сделай резюме");
             println!("    code main.py найди баги");
-            println!("    summarize C:\\documents           резюме папки");
+            if cfg!(target_os = "windows") {
+                println!("    summarize C:\\documents           резюме папки");
+            } else {
+                println!("    summarize ~/documents            резюме папки");
+            }
             println!("    translate hello world --to русский");
             println!("    clip сделай резюме               текст из буфера обмена");
             println!("    screen                           что на экране (скриншот)");
