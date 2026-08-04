@@ -99,11 +99,47 @@ fn split_args(s: &str) -> Vec<String> {
     out
 }
 
-fn exec_tool(args: &[String]) {
+fn find_tool_binary() -> Option<PathBuf> {
+    let dir = exe_dir();
     #[cfg(target_os = "windows")]
-    let exe = exe_dir().join("Tool.exe");
+    let exact: &[&str] = &["Tool.exe", "tool.exe"];
     #[cfg(not(target_os = "windows"))]
-    let exe = exe_dir().join("tool");
+    let exact: &[&str] = &["tool"];
+    for name in exact {
+        let p = dir.join(name);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    let cur = env::current_exe().ok();
+    if let Ok(rd) = fs::read_dir(&dir) {
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            let base = name.to_lowercase();
+            if base == "toolcmd" || base == "toolcmd.exe" || base.starts_with("toolcmd-") {
+                continue;
+            }
+            if base == "tool" || base == "tool.exe" || base.starts_with("tool-") {
+                if cur.as_ref().map(|c| e.path() == *c).unwrap_or(false) {
+                    continue;
+                }
+                if e.path().is_file() {
+                    return Some(e.path());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn exec_tool(args: &[String]) {
+    let exe = match find_tool_binary() {
+        Some(p) => p,
+        None => {
+            eprintln!("Не найден бинарь Tool рядом с toolcmd. Положи их в одну папку.");
+            return;
+        }
+    };
     match Command::new(&exe).args(args).status() {
         Ok(_) => {}
         Err(e) => eprintln!("Ошибка запуска Tool: {}", e),
@@ -159,7 +195,11 @@ fn run_line(line: String, aliases: &[(String, String)]) {
 
 fn main() {
     let mut aliases = load_aliases();
-    println!("ToolCmd — консоль. Команды Tool работают без префикса, остальное — в cmd.");
+    if cfg!(target_os = "windows") {
+        println!("ToolCmd — консоль. Команды Tool работают без префикса, остальное — в cmd.");
+    } else {
+        println!("ToolCmd — консоль. Команды Tool работают без префикса, остальное — в sh.");
+    }
     println!("Справка с примерами: help    Выход: exit    Алиасы: alias имя=команда");
     loop {
         let dir = env::current_dir().map(|d| d.display().to_string()).unwrap_or_default();
@@ -208,7 +248,11 @@ fn main() {
             println!("    screen                           что на экране (скриншот)");
             println!();
             println!("  Служебные: settings (настройки), alias (алиасы), exit");
-            println!("  Обычные команды Windows (dir, cd, del...) работают как в cmd.");
+            if cfg!(target_os = "windows") {
+                println!("  Обычные команды Windows (dir, cd, del...) работают как в cmd.");
+            } else {
+                println!("  Обычные команды системы (ls, cd, pwd...) работают как в sh.");
+            }
             continue;
         }
         if lower == "aliases" {

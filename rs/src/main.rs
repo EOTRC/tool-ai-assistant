@@ -672,8 +672,13 @@ fn chat_round(
 }
 
 fn print_help() {
-    println!("Tool {} — локальный ИИ-ассистент (cmd-обёртка).", "0.2.0");
-    println!("Обычные команды Windows работают как в cmd. Свои команды:");
+    if cfg!(target_os = "windows") {
+        println!("Tool {} — локальный ИИ-ассистент (cmd-обёртка).", "0.2.0");
+        println!("Обычные команды Windows работают как в cmd. Свои команды:");
+    } else {
+        println!("Tool {} — локальный ИИ-ассистент (оболочка sh).", "0.2.0");
+        println!("Обычные команды системы работают как в sh. Свои команды:");
+    }
     println!();
     println!("  ИИ (модель из settings.cfg, по умолчанию qwen3:1.7b):");
     println!("    Tool chat                      диалог со стримингом (exit/пока — выход)");
@@ -681,7 +686,7 @@ fn print_help() {
     println!("    Tool chat --once \"вопрос\"      один ответ");
     println!("    Tool chat --once \"q\" --think   один ответ с думаньем");
     println!("    В чате: /think on | off        включить/выключить думанье");
-    println!("    Tool shell \"показать место\"    натуральный язык -> команда PowerShell");
+    println!("    Tool shell \"показать место\"    натуральный язык -> команда оболочки");
     println!("    Tool shell \"...\" --run         выполнить команду (опасные требуют --force)");
     println!("    Tool web \"что искать\"          поиск в интернете");
     println!("    Tool screen \"что на экране\"    скриншот + описание (qwen2.5vl)");
@@ -702,14 +707,18 @@ fn print_help() {
     println!();
     println!("  Служебные:");
     println!("    Tool help            справка");
-    println!("    Tool settings        открыть settings.cfg в блокноте");
+    println!("    Tool settings        открыть settings.cfg в текстовом редакторе");
     println!("    Tool settings view   показать настройки");
     println!("    Tool alias           список алиасов");
     println!("    Tool selftest        самодиагностика (всё в одном)");
     println!("    Tool todo            показать TODO/как это работает");
     println!();
     println!("  toolcmd — консоль, где команды Tool работают без префикса,");
-    println!("  есть алиасы (alias имя=команда) и обычные cmd-команды.");
+    if cfg!(target_os = "windows") {
+        println!("  есть алиасы (alias имя=команда) и обычные cmd-команды.");
+    } else {
+        println!("  есть алиасы (alias имя=команда) и обычные sh-команды.");
+    }
 }
 
 fn print_todo(settings: &Settings) {
